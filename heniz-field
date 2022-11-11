@@ -1,0 +1,95 @@
+library(sf)
+library(tidyverse)
+library(osmdata)
+library(showtext)
+library(raster)
+
+### getting pittsburgh's coordinate matrix
+pittsburgh_matrix <- getbb("Pittsburgh, PA")
+
+### creating a vector of the coordinates
+pittsburgh_bb <- c(-80.09552, 40.36152,
+                   -79.86573, 40.50120)
+
+### adding the type of motorway we want into the `roads_main` features
+roads_main <- opq(bbox = pittsburgh_bb) %>%
+  add_osm_feature(key = "highway",
+                  value = c('primary',
+                            'secondary',
+                            'motorway',
+                            'trunk',
+                            'primary_link',
+                            'secondary_link',
+                            'trunk_link',
+                            'motorway_link')) %>%
+  osmdata_sf()
+
+### creating roadways
+roads_all <- opq(bbox = pittsburgh_bb) %>%
+  add_osm_feature(key = "highway") %>%
+  osmdata_sf()
+
+### grabbing the buildings
+buildings <- opq(pittsburgh_bb) |> 
+  add_osm_feature(key = "building") %>%
+  osmdata_sf()
+
+### grabbing landuse areas
+landuse <- opq(pittsburgh_bb) |>
+  add_osm_feature(key = 'landuse', value = c('grass','forest')) |>
+  osmdata_sf()
+
+### getting parks
+leisure <- opq(pittsburgh_bb) |>
+  add_osm_feature(key = 'leisure', value = c('garden','park')) |>
+  osmdata_sf()
+
+### getting other natural areas
+natural <- opq(bbox = pittsburgh_bb) |>
+  add_osm_feature(key = 'natural') |>
+  osmdata_sf()
+
+### getting the rivers and the confluence
+river <- opq(bbox = pittsburgh_bb) |>
+  add_osm_feature(key = 'water') |>
+  osmdata_sf()
+
+### centering the map on heinz field 
+long = -80.015823
+lat = 40.446903
+
+### creating the circular plot
+center_proj <-
+  tibble(long, lat) %>%
+  st_as_sf(coords = c("long", "lat"), crs = crs(roads_main$osm_lines))
+
+### adding the distance to the circular plot
+dist <-  1000
+circle <- tibble(long, lat) %>%
+  st_as_sf(coords = c("long", "lat"), crs = crs(roads_main$osm_lines)) %>%
+  st_buffer(dist = dist) %>%
+  st_transform(crs = crs(roads_main$osm_lines))
+
+### mapping everything to the circle
+roads_lines <- st_intersection(circle, roads_main$osm_lines)
+roads_all_lines <- st_intersection(circle, roads_all$osm_lines)
+river_lines <- st_intersection(circle, river$osm_multipolygons)
+buildings_lines <- st_intersection(circle, buildings$osm_polygons)
+landuse_lines <- st_intersection(circle, landuse$osm_polygons) 
+leisure_lines <- st_intersection(circle, leisure$osm_polygons)
+natural_lines <- st_intersection(circle, natural$osm_polygons)
+
+### plotting
+ggplot() +
+  geom_sf(data = river_lines, color = '#0f3b5f', fill = '#0f3b5f') +
+  geom_sf(data = landuse_lines, color = '#3c6f57', fill = '#3c6f57') +
+  geom_sf(data = leisure_lines, color = '#5f7c45', fill = '#5f7c45') +
+  geom_sf(data = natural_lines, color = '#3c6f57', fill = '#3c6f57')+
+  geom_sf(data = buildings_lines, color = NA, fill = '#f3b49f') +
+  geom_sf(data = roads_all_lines, color = 'grey60', fill = 'grey60', size = .3) +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "#3a3b3c", color = NA)
+
+ggsave("heinzfield.png", dpi = 600)
+
+teams <- nflfastR::teams_colors_logos
